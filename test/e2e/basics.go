@@ -280,7 +280,7 @@ func testAllowPathsRegexp(client kubernetes.Interface) kubetest.TestSuite {
 			Name: "WithPathhNotAllowed",
 			Description: `
 				As a client with the correct RBAC rules,
-				I get a 404 response when requesting a path which isn't allowed by kube-rbac-proxy
+				I get a 403 response when requesting a path which isn't allowed by kube-rbac-proxy
 			`,
 
 			Given: kubetest.Actions(allowPathsSetup.Launch(client)),
@@ -388,7 +388,8 @@ func testIgnorePaths(client kubernetes.Interface) kubetest.TestSuite {
 			Name: "WithIgnorePathNoMatch",
 			Description: `
 				As a client without an auth token,
-				I get a 401 response when requesting a path not included in ignorePaths
+				I get a 403 response when requesting a path not included in ignorePaths
+				because I end up being system:anonymous to the proxy
 			`,
 
 			Given: kubetest.Actions(ignorePathsSetup.Launch(client)),
@@ -406,12 +407,12 @@ func testIgnorePaths(client kubernetes.Interface) kubetest.TestSuite {
 			Then: kubetest.Actions(
 				kubetest.ClientSucceeds(
 					client,
-					fmt.Sprintf(commandWithoutAuth, "/", 401, 401),
+					fmt.Sprintf(commandWithoutAuth, "/", 403, 403),
 					nil,
 				),
 				kubetest.ClientSucceeds(
 					client,
-					fmt.Sprintf(commandWithoutAuth, "/api/v1/label/job/values", 401, 401),
+					fmt.Sprintf(commandWithoutAuth, "/api/v1/label/job/values", 403, 403),
 					nil,
 				),
 			),

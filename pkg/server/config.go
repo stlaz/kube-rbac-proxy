@@ -27,7 +27,6 @@ import (
 
 	serverconfig "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/brancz/kube-rbac-proxy/pkg/authn"
 	"github.com/brancz/kube-rbac-proxy/pkg/authz"
@@ -36,7 +35,9 @@ import (
 
 // KubeRBACProxyConfig stores the configuration for running the proxy server and kube-rbac-proxy specific configuration.
 type KubeRBACProxyConfig struct {
-	SecureServing *serverconfig.SecureServingInfo
+	SecureServing            *serverconfig.SecureServingInfo
+	DelegatingAuthentication *serverconfig.AuthenticationInfo
+	DelegatingAuthorization  *serverconfig.AuthorizationInfo
 
 	KubeRBACProxyInfo *KubeRBACProxyInfo
 }
@@ -53,7 +54,7 @@ type KubeRBACProxyInfo struct {
 
 	Auth *proxy.Config
 
-	KubeClient *kubernetes.Clientset
+	OIDC *authn.OIDCConfig
 
 	AllowPaths  []string
 	IgnorePaths []string
@@ -61,14 +62,14 @@ type KubeRBACProxyInfo struct {
 
 func NewConfig() *KubeRBACProxyConfig {
 	return &KubeRBACProxyConfig{
-		SecureServing: &serverconfig.SecureServingInfo{},
+		SecureServing:            &serverconfig.SecureServingInfo{},
+		DelegatingAuthentication: &serverconfig.AuthenticationInfo{},
+		DelegatingAuthorization:  &serverconfig.AuthorizationInfo{},
 		KubeRBACProxyInfo: &KubeRBACProxyInfo{
 			Auth: &proxy.Config{
 				Authentication: &authn.AuthnConfig{
 					X509:   &authn.X509Config{},
 					Header: &authn.AuthnHeaderConfig{},
-					OIDC:   &authn.OIDCConfig{},
-					Token:  &authn.TokenConfig{},
 				},
 				Authorization: &authz.Config{},
 			},
