@@ -36,13 +36,16 @@ import (
 	"golang.org/x/net/http2/h2c"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authorization/union"
 	serverconfig "k8s.io/apiserver/pkg/server"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/rest"
 	k8sapiflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/logs"
+	logsapi "k8s.io/component-base/logs/api/v1"
 	"k8s.io/component-base/term"
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/klog/v2"
@@ -53,6 +56,10 @@ import (
 	"github.com/brancz/kube-rbac-proxy/pkg/filters"
 	"github.com/brancz/kube-rbac-proxy/pkg/server"
 )
+
+func init() {
+	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+}
 
 func NewKubeRBACProxyCommand() *cobra.Command {
 	o := options.NewProxyRunOptions()
@@ -73,6 +80,12 @@ that can perform RBAC authorization against the Kubernetes API using SubjectAcce
 			verflag.PrintAndExitIfRequested()
 
 			fs := cmd.Flags()
+
+			// Activate logging as soon as possible, after that
+			// show flags with the final logging configuration.
+			if err := logsapi.ValidateAndApply(o.Logs, utilfeature.DefaultFeatureGate); err != nil {
+				return err
+			}
 
 			k8sapiflag.PrintFlags(fs)
 

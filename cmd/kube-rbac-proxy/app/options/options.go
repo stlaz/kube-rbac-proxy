@@ -17,6 +17,8 @@ limitations under the License.
 package options
 
 import (
+	"k8s.io/component-base/logs"
+
 	"github.com/brancz/kube-rbac-proxy/pkg/authn"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	kubeflags "k8s.io/component-base/cli/flag"
@@ -29,6 +31,8 @@ type ProxyRunOptions struct {
 	ProxySecureServing *genericoptions.SecureServingOptions
 	ProxyOptions       *ProxyOptions
 	LegacyOptions      *LegacyOptions
+
+	Logs *logs.Options
 }
 
 func NewProxyRunOptions() *ProxyRunOptions {
@@ -50,6 +54,7 @@ func NewProxyRunOptions() *ProxyRunOptions {
 func (o *ProxyRunOptions) Flags() kubeflags.NamedFlagSets {
 	namedFlagSets := kubeflags.NamedFlagSets{}
 
+	logs.AddFlags(namedFlagSets.FlagSet("logging"))
 	o.SecureServing.AddFlags(namedFlagSets.FlagSet("secure serving"))
 	o.ProxyOptions.AddFlags(namedFlagSets.FlagSet("proxy"))
 	o.LegacyOptions.AddFlags(namedFlagSets.FlagSet("legacy kube-rbac-proxy [DEPRECATED]"))
