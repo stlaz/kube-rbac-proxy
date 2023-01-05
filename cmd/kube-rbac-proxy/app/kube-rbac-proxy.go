@@ -31,13 +31,10 @@ import (
 	"github.com/oklog/run"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/http2"
-<<<<<<< HEAD
-	"golang.org/x/net/http2/h2c" //nolint:staticcheck // deprecated in x/net >= v0.55.0, migration to http.Server.Protocols tracked in #446
-=======
->>>>>>> remove --insecure-listen-address
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/authorization/union"
 	kubefilters "k8s.io/apiserver/pkg/endpoints/filters"
 	"k8s.io/apiserver/pkg/endpoints/request"
@@ -88,9 +85,6 @@ that can perform RBAC authorization against the Kubernetes API using SubjectAcce
 
 			fs := cmd.Flags()
 			k8sapiflag.PrintFlags(fs)
-
-			// TODO: this should be done somewhere elsewhere?
-			o.DelegatingAuthorization.WithAlwaysAllowPaths(o.ProxyOptions.IgnorePaths...)
 
 			// set default options
 			completedOptions, err := Complete(o)
@@ -187,17 +181,9 @@ func Run(opts *completedProxyRunOptions) error {
 		authenticator = cfg.DelegatingAuthentication.Authenticator
 	}
 
-	staticAuthorizer, err := authz.NewStaticAuthorizer(cfg.KubeRBACProxyInfo.Auth.Authorization.Static)
+	authz, err := setupAuthorizer(cfg.KubeRBACProxyInfo, cfg.DelegatingAuthorization)
 	if err != nil {
-		return fmt.Errorf("failed to create static authorizer: %w", err)
-	}
-
-	authorizer, err := union.New(
-		union.NamedAuthorizer{AuthorizerName: "static", Authorizer: staticAuthorizer},
-		union.NamedAuthorizer{AuthorizerName: "delegating", Authorizer: cfg.DelegatingAuthorization.Authorizer},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create authorizer: %w", err)
+		return fmt.Errorf("failed to setup an authorizer: %v", err)
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(cfg.KubeRBACProxyInfo.UpstreamURL)
@@ -216,11 +202,10 @@ func Run(opts *completedProxyRunOptions) error {
 	}
 
 	handler := filters.WithAuthHeaders(proxy, cfg.KubeRBACProxyInfo.Auth.Authentication.Header)
-	handler = kubefilters.WithAuthorization(handler, krbproxy.NewKubeRBACProxyAuthorizer(authorizer, cfg.KubeRBACProxyInfo.Auth.Authorization), scheme.Codecs)
+	handler = kubefilters.WithAuthorization(handler, authz, scheme.Codecs)
 	handler = kubefilters.WithAuthentication(handler, authenticator, http.HandlerFunc(filters.UnauthorizedHandler), cfg.DelegatingAuthentication.APIAudiences, cfg.DelegatingAuthentication.RequestHeaderConfig)
 	handler = kubefilters.WithRequestInfo(handler, &request.RequestInfoFactory{})
 	handler = krbproxy.WithKubeRBACProxyParamsHandler(handler, cfg.KubeRBACProxyInfo.Auth.Authorization)
-	handler = filters.WithAllowPaths(handler, cfg.KubeRBACProxyInfo.AllowPaths)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", handler)
@@ -313,4 +298,47 @@ func secureServerRunner(
 	}
 
 	return runner, interrupter
+}
+
+func setupAuthorizer(krbInfo *server.KubeRBACProxyInfo, delegatedAuthz *serverconfig.AuthorizationInfo) (authorizer.Authorizer, error) {
+	staticAuthorizer, err := authz.NewStaticAuthorizer(krbInfo.Auth.Authorization.Static)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create static authorizer: %w", err)
+	}
+
+	baseAuthorizers, err := union.New(
+		union.NamedAuthorizer{AuthorizerName: "static", Authorizer: staticAuthorizer},
+		union.NamedAuthorizer{AuthorizerName: "delegating", Authorizer: delegatedAuthz.Authorizer},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authorizer: %w", err)
+	}
+
+	var authz authorizer.Authorizer = krbproxy.NewKubeRBACProxyAuthorizer(
+		baseAuthorizers,
+		krbInfo.Auth.Authorization,
+	)
+
+	if allowPaths := krbInfo.AllowPaths; len(allowPaths) > 0 {
+		authz, err = union.New(
+			union.NamedAuthorizer{AuthorizerName: "allowPaths", Authorizer: filters.NewAllowPathAuthorizer(allowPaths)},
+			union.NamedAuthorizer{AuthorizerName: "krpAuthorizerNoAllowPaths", Authorizer: authz},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add allowPaths authorizer: %w", err)
+		}
+	}
+
+	if ignorePaths := krbInfo.IgnorePaths; len(ignorePaths) > 0 {
+		authz, err = union.New(
+			union.NamedAuthorizer{AuthorizerName: "ignorePaths", Authorizer: filters.NewPathAuthorizer(ignorePaths)},
+			union.NamedAuthorizer{AuthorizerName: "krpAuthorizerNoIgnorePaths", Authorizer: authz},
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to add ignorePaths authorizer: %w", err)
+		}
+	}
+
+	return authz, nil
 }

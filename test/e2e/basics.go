@@ -277,7 +277,7 @@ func testAllowPathsRegexp(client kubernetes.Interface) kubetest.TestSuite {
 			UpdateFlags(map[string]string{"allow-paths": "/metrics,/api/v1/label/*/values"})
 
 		kubetest.Scenario{
-			Name: "WithPathhNotAllowed",
+			Name: "WithPathNotAllowed",
 			Description: `
 				As a client with the correct RBAC rules,
 				I get a 403 response when requesting a path which isn't allowed by kube-rbac-proxy
@@ -298,12 +298,12 @@ func testAllowPathsRegexp(client kubernetes.Interface) kubetest.TestSuite {
 			Then: kubetest.Actions(
 				kubetest.ClientSucceeds(
 					client,
-					fmt.Sprintf(command, "/", 404, 404),
+					fmt.Sprintf(command, "/", 403, 403),
 					nil,
 				),
 				kubetest.ClientSucceeds(
 					client,
-					fmt.Sprintf(command, "/api/v1/label/name", 404, 404),
+					fmt.Sprintf(command, "/api/v1/label/name", 403, 403),
 					nil,
 				),
 			),
