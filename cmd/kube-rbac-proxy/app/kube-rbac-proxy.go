@@ -331,12 +331,11 @@ func setupAuthorizer(krbInfo *server.KubeRBACProxyInfo, delegatedAuthz *serverco
 
 	if ignorePaths := krbInfo.IgnorePaths; len(ignorePaths) > 0 {
 		authz, err = union.New(
-			union.NamedAuthorizer{AuthorizerName: "ignorePaths", Authorizer: filters.NewPathAuthorizer(ignorePaths)},
-			union.NamedAuthorizer{AuthorizerName: "krpAuthorizerNoIgnorePaths", Authorizer: authz},
+			union.NamedAuthorizer{AuthorizerName: "alwaysAllowPath", Authorizer: filters.NewAlwaysAllowPathAuthorizer(ignorePaths)},
+			union.NamedAuthorizer{AuthorizerName: "krpAuthorizerNoAlwaysAllowPath", Authorizer: authz},
 		)
-
 		if err != nil {
-			return nil, fmt.Errorf("failed to add ignorePaths authorizer: %w", err)
+			return nil, fmt.Errorf("failed to add alwaysAllowPath authorizer: %w", err)
 		}
 	}
 
