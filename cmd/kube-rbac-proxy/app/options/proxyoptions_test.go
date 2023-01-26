@@ -22,8 +22,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/brancz/kube-rbac-proxy/pkg/authz"
 	"github.com/google/go-cmp/cmp"
+
+	authz "github.com/brancz/kube-rbac-proxy/pkg/authorization"
+	"github.com/brancz/kube-rbac-proxy/pkg/authorization/rewrite"
+	"github.com/brancz/kube-rbac-proxy/pkg/authorization/static"
 )
 
 func TestParseAuthorizationConfigFile(t *testing.T) {
@@ -33,7 +36,7 @@ func TestParseAuthorizationConfigFile(t *testing.T) {
 	tests := []struct {
 		name        string
 		fileContent string
-		want        *authz.Config
+		want        *authz.AuthzConfig
 		wantErr     bool
 	}{
 		{
@@ -54,23 +57,31 @@ func TestParseAuthorizationConfigFile(t *testing.T) {
       subresource: metrics
       namespace: default
       verb: get`,
-			want: &authz.Config{
-				Rewrites: &authz.SubjectAccessReviewRewrites{
-					ByQueryParameter: &authz.QueryParameterRewriteConfig{Name: "namespace"},
+			want: &authz.AuthzConfig{
+				RewriteAttributesConfig: &rewrite.RewriteAttributesConfig{
+					Rewrites: &rewrite.SubjectAccessReviewRewrites{
+						ByQueryParameter: &rewrite.QueryParameterRewriteConfig{
+							Name: "namespace",
+						},
+					},
+					ResourceAttributes: &rewrite.ResourceAttributes{
+						Resource:    "namespaces",
+						Subresource: "metrics",
+						Namespace:   "{{ .Value }}",
+					},
 				},
-				ResourceAttributes: &authz.ResourceAttributes{
-					Resource:    "namespaces",
-					Subresource: "metrics",
-					Namespace:   "{{ .Value }}",
+				Static: []static.StaticAuthorizationConfig{
+					{
+						User: static.UserConfig{
+							Name: "system:serviceaccount:default:default",
+						},
+						ResourceRequest: true,
+						Resource:        "namespaces",
+						Subresource:     "metrics",
+						Namespace:       "default",
+						Verb:            "get",
+					},
 				},
-				Static: []authz.StaticAuthorizationConfig{{
-					User:            authz.UserConfig{Name: "system:serviceaccount:default:default"},
-					ResourceRequest: true,
-					Resource:        "namespaces",
-					Subresource:     "metrics",
-					Namespace:       "default",
-					Verb:            "get",
-				}},
 			},
 		},
 		{
@@ -82,13 +93,17 @@ func TestParseAuthorizationConfigFile(t *testing.T) {
       resourceRequest: false
       verb: get
       path: /metrics`,
-			want: &authz.Config{
-				Static: []authz.StaticAuthorizationConfig{{
-					User:            authz.UserConfig{Name: "system:serviceaccount:default:default"},
-					ResourceRequest: false,
-					Verb:            "get",
-					Path:            "/metrics",
-				}},
+			want: &authz.AuthzConfig{
+				Static: []static.StaticAuthorizationConfig{
+					{
+						User: static.UserConfig{
+							Name: "system:serviceaccount:default:default",
+						},
+						ResourceRequest: false,
+						Verb:            "get",
+						Path:            "/metrics",
+					},
+				},
 			},
 		},
 	}

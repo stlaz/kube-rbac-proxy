@@ -50,9 +50,11 @@ import (
 
 	"github.com/brancz/kube-rbac-proxy/cmd/kube-rbac-proxy/app/options"
 	"github.com/brancz/kube-rbac-proxy/pkg/authn"
-	"github.com/brancz/kube-rbac-proxy/pkg/authz"
+	"github.com/brancz/kube-rbac-proxy/pkg/authn/identityheaders"
+	"github.com/brancz/kube-rbac-proxy/pkg/authorization/path"
+	"github.com/brancz/kube-rbac-proxy/pkg/authorization/rewrite"
+	"github.com/brancz/kube-rbac-proxy/pkg/authorization/static"
 	"github.com/brancz/kube-rbac-proxy/pkg/filters"
-	krbproxy "github.com/brancz/kube-rbac-proxy/pkg/proxy"
 	"github.com/brancz/kube-rbac-proxy/pkg/server"
 )
 
@@ -201,11 +203,11 @@ func Run(opts *completedProxyRunOptions) error {
 		}
 	}
 
-	handler := filters.WithAuthHeaders(proxy, cfg.KubeRBACProxyInfo.Auth.Authentication.Header)
+	handler := identityheaders.WithAuthHeaders(proxy, cfg.KubeRBACProxyInfo.UpstreamHeaders)
 	handler = kubefilters.WithAuthorization(handler, authz, scheme.Codecs)
 	handler = kubefilters.WithAuthentication(handler, authenticator, http.HandlerFunc(filters.UnauthorizedHandler), cfg.DelegatingAuthentication.APIAudiences, cfg.DelegatingAuthentication.RequestHeaderConfig)
 	handler = kubefilters.WithRequestInfo(handler, &request.RequestInfoFactory{})
-	handler = krbproxy.WithKubeRBACProxyParamsHandler(handler, cfg.KubeRBACProxyInfo.Auth.Authorization)
+	handler = rewrite.WithKubeRBACProxyParamsHandler(handler, cfg.KubeRBACProxyInfo.Authorization.RewriteAttributesConfig)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", handler)
@@ -301,7 +303,7 @@ func secureServerRunner(
 }
 
 func setupAuthorizer(krbInfo *server.KubeRBACProxyInfo, delegatedAuthz *serverconfig.AuthorizationInfo) (authorizer.Authorizer, error) {
-	staticAuthorizer, err := authz.NewStaticAuthorizer(krbInfo.Auth.Authorization.Static)
+	staticAuthorizer, err := static.NewStaticAuthorizer(krbInfo.Authorization.Static)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create static authorizer: %w", err)
 	}
@@ -314,14 +316,14 @@ func setupAuthorizer(krbInfo *server.KubeRBACProxyInfo, delegatedAuthz *serverco
 		return nil, fmt.Errorf("failed to create authorizer: %w", err)
 	}
 
-	var authz authorizer.Authorizer = krbproxy.NewKubeRBACProxyAuthorizer(
+	var authz authorizer.Authorizer = rewrite.NewRewritingAuthorizer(
 		baseAuthorizers,
-		krbInfo.Auth.Authorization,
+		krbInfo.Authorization.RewriteAttributesConfig,
 	)
 
 	if allowPaths := krbInfo.AllowPaths; len(allowPaths) > 0 {
 		authz, err = union.New(
-			union.NamedAuthorizer{AuthorizerName: "allowPaths", Authorizer: filters.NewAllowPathAuthorizer(allowPaths)},
+			union.NamedAuthorizer{AuthorizerName: "allowPaths", Authorizer: path.NewAllowPathAuthorizer(allowPaths)},
 			union.NamedAuthorizer{AuthorizerName: "krpAuthorizerNoAllowPaths", Authorizer: authz},
 		)
 		if err != nil {
@@ -331,11 +333,11 @@ func setupAuthorizer(krbInfo *server.KubeRBACProxyInfo, delegatedAuthz *serverco
 
 	if ignorePaths := krbInfo.IgnorePaths; len(ignorePaths) > 0 {
 		authz, err = union.New(
-			union.NamedAuthorizer{AuthorizerName: "alwaysAllowPath", Authorizer: filters.NewAlwaysAllowPathAuthorizer(ignorePaths)},
+			union.NamedAuthorizer{AuthorizerName: "alwaysAllowPath", Authorizer: path.NewAlwaysAllowPathAuthorizer(ignorePaths)},
 			union.NamedAuthorizer{AuthorizerName: "krpAuthorizerNoAlwaysAllowPath", Authorizer: authz},
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to add alwaysAllowPath authorizer: %w", err)
+			return nil, fmt.Errorf("failed to add ignorePaths authorizer: %w", err)
 		}
 	}
 
