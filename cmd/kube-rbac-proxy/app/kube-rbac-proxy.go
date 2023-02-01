@@ -122,6 +122,7 @@ func (o *completedProxyRunOptions) Validate() []error {
 	errs = append(errs, o.DelegatingAuthorization.Validate()...)
 	errs = append(errs, o.ProxyOptions.Validate()...)
 	errs = append(errs, o.OIDCOptions.Validate()...)
+	errs = append(errs, o.ProxyRunOptions.ExtraValidate()...)
 
 	return errs
 }
