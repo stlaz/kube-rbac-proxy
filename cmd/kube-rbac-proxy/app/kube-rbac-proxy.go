@@ -278,44 +278,65 @@ func Run(cfg *server.KubeRBACProxyConfig) error {
 	return nil
 }
 
+// setupAuthorizer runs different authorization checks based on the configuration.
 func setupAuthorizer(krbInfo *server.KubeRBACProxyInfo, delegatedAuthz *serverconfig.AuthorizationInfo) (authorizer.Authorizer, error) {
-	staticAuthorizer, err := static.NewStaticAuthorizer(krbInfo.Authorization.Static)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create static authorizer: %w", err)
+	// pathAuthorizer is running before any other authorizer.
+	// It works outside of the default authorizers.
+	var pathAuthorizer authorizer.Authorizer
+
+	// AllowPaths denies access to paths that are not listed.
+	// IgnorePaths doesn't auth(n/z) paths that are listed.
+	switch {
+	case len(krbInfo.AllowPaths) > 0:
+		pathAuthorizer = path.NewAllowPathAuthorizer(krbInfo.AllowPaths)
+	case len(krbInfo.IgnorePaths) > 0:
+		pathAuthorizer = path.NewAlwaysAllowPathAuthorizer(krbInfo.IgnorePaths)
 	}
 
-	baseAuthorizers, err := union.New(
-		union.NamedAuthorizer{AuthorizerName: "static", Authorizer: staticAuthorizer},
-		union.NamedAuthorizer{AuthorizerName: "delegating", Authorizer: delegatedAuthz.Authorizer},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create authorizer: %w", err)
-	}
-
-	var authz authorizer.Authorizer = rewrite.NewRewritingAuthorizer(
-		baseAuthorizers,
-		krbInfo.Authorization.RewriteAttributesConfig,
-	)
-
-	if allowPaths := krbInfo.AllowPaths; len(allowPaths) > 0 {
-		authz, err = union.New(
-			union.NamedAuthorizer{AuthorizerName: "allowPaths", Authorizer: path.NewAllowPathAuthorizer(allowPaths)},
-			union.NamedAuthorizer{AuthorizerName: "krpAuthorizerNoAllowPaths", Authorizer: authz},
-		)
+	// Delegated authorizers are running after the pathAuthorizer
+	// and after the attributes have been rewritten.
+	var delegated []union.NamedAuthorizer
+	// Static authorization authorizes against a static file is ran before the SubjectAccessReview.
+	if krbInfo.Authorization.Static != nil {
+		staticAuthorizer, err := static.NewStaticAuthorizer(krbInfo.Authorization.Static)
 		if err != nil {
-			return nil, fmt.Errorf("failed to add allowPaths authorizer: %w", err)
+			return nil, fmt.Errorf("failed to create static authorizer: %w", err)
 		}
-	}
 
-	if ignorePaths := krbInfo.IgnorePaths; len(ignorePaths) > 0 {
-		authz, err = union.New(
-			union.NamedAuthorizer{AuthorizerName: "alwaysAllowPath", Authorizer: path.NewAlwaysAllowPathAuthorizer(ignorePaths)},
-			union.NamedAuthorizer{AuthorizerName: "krpAuthorizerNoAlwaysAllowPath", Authorizer: authz},
+		delegated = append(delegated, union.NamedAuthorizer{AuthorizerName: "static", Authorizer: staticAuthorizer})
+	}
+	delegated = append(delegated, union.NamedAuthorizer{AuthorizerName: "delegating", Authorizer: delegatedAuthz.Authorizer})
+
+	// Rewriting attributes such that they fit the given use-case.
+	var attrsGenerator rewrite.AttributesGenerator
+	switch {
+	case krbInfo.Authorization.ResourceAttributes != nil && krbInfo.Authorization.Rewrites == nil:
+		attrsGenerator = rewrite.NewResourceAttributesGenerator(
+			krbInfo.Authorization.ResourceAttributes,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to add ignorePaths authorizer: %w", err)
-		}
+	case krbInfo.Authorization.ResourceAttributes != nil && krbInfo.Authorization.Rewrites != nil:
+		attrsGenerator = rewrite.NewTemplatedResourceAttributesGenerator(
+			krbInfo.Authorization.ResourceAttributes,
+		)
+	default:
+		attrsGenerator = &rewrite.NonResourceAttributesGenerator{}
 	}
 
-	return authz, nil
+	authzUnion, err := union.New(delegated...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct union of all the configured authorizers: %w", err)
+	}
+	rewritingAuthorizer := rewrite.NewRewritingAuthorizer(
+		authzUnion,
+		attrsGenerator,
+	)
+
+	if pathAuthorizer != nil {
+		return union.New(
+			union.NamedAuthorizer{AuthorizerName: "path", Authorizer: pathAuthorizer},
+			union.NamedAuthorizer{AuthorizerName: "rewriting", Authorizer: rewritingAuthorizer},
+		)
+	}
+
+	return rewritingAuthorizer, nil
 }
