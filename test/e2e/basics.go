@@ -303,7 +303,7 @@ func testAllowPathsRegexp(client kubernetes.Interface) kubetest.TestSuite {
 				),
 				kubetest.ClientSucceeds(
 					client,
-					fmt.Sprintf(command, "/api/v1/label/name", 403, 403),
+					fmt.Sprintf(command, "/api/v1", 403, 403),
 					nil,
 				),
 			),
@@ -378,7 +378,17 @@ func testIgnorePaths(client kubernetes.Interface) kubetest.TestSuite {
 				),
 				kubetest.ClientSucceeds(
 					client,
+					fmt.Sprintf(commandWithoutAuth, "/api/v1/", 200, 200),
+					nil,
+				),
+				kubetest.ClientSucceeds(
+					client,
 					fmt.Sprintf(commandWithoutAuth, "/api/v1/labels", 200, 200),
+					nil,
+				),
+				kubetest.ClientSucceeds(
+					client,
+					fmt.Sprintf(commandWithoutAuth, "/api/v1/label/values", 200, 200),
 					nil,
 				),
 			),
@@ -412,7 +422,12 @@ func testIgnorePaths(client kubernetes.Interface) kubetest.TestSuite {
 				),
 				kubetest.ClientSucceeds(
 					client,
-					fmt.Sprintf(commandWithoutAuth, "/api/v1/label/job/values", 403, 403),
+					fmt.Sprintf(commandWithoutAuth, "/api/v1", 403, 403),
+					nil,
+				),
+				kubetest.ClientSucceeds(
+					client,
+					fmt.Sprintf(commandWithoutAuth, "/api/v12", 403, 403),
 					nil,
 				),
 			),
