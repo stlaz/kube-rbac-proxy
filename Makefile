@@ -119,6 +119,8 @@ test-local-setup: VERSION_SEMVER = $(shell cat VERSION)
 test-local-setup: clean test-container kind-create-cluster
 test-local: test-local-setup test
 
+test-e2e-local:	test-local-setup test-e2e
+
 kind-delete-cluster:
 	kind delete cluster
 
