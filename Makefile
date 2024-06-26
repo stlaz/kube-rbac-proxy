@@ -74,6 +74,10 @@ ifeq ($(GOARCH), amd64)
 	docker tag $(DOCKER_REPO):$(VERSION)-$(GOARCH) $(CONTAINER_NAME)
 endif
 
+container-test: GOOS = linux
+container-test: $(OUT_DIR)/$(BIN)-$(GOOS)-$(GOARCH) Dockerfile
+	docker build --build-arg BINARY=$(BIN)-$(GOOS)-$(GOARCH) --build-arg GOARCH=$(GOARCH) -t $(CONTAINER_NAME) .
+
 manifest-tool:
 	curl -fsSL https://github.com/estesp/manifest-tool/releases/download/v1.0.2/manifest-tool-linux-amd64 > ./manifest-tool
 	chmod +x ./manifest-tool
