@@ -74,10 +74,6 @@ ifeq ($(GOARCH), amd64)
 	docker tag $(DOCKER_REPO):$(VERSION)-$(GOARCH) $(CONTAINER_NAME)
 endif
 
-container-test: GOOS = linux
-container-test: $(OUT_DIR)/$(BIN)-$(GOOS)-$(GOARCH) Dockerfile
-	docker build --build-arg BINARY=$(BIN)-$(GOOS)-$(GOARCH) --build-arg GOARCH=$(GOARCH) -t $(CONTAINER_NAME) .
-
 manifest-tool:
 	curl -fsSL https://github.com/estesp/manifest-tool/releases/download/v1.0.2/manifest-tool-linux-amd64 > ./manifest-tool
 	chmod +x ./manifest-tool
@@ -93,6 +89,9 @@ manifest-push: manifest-tool
 	./manifest-tool push from-args --platforms $(subst $(space),$(comma),$(ALL_PLATFORMS)) --template $(DOCKER_REPO):$(VERSION)-ARCH --target $(DOCKER_REPO):$(VERSION)
 
 push: crossbuild manifest-tool $(addprefix push-,$(ALL_ARCH)) manifest-push
+
+test-container: $(OUT_DIR)/$(PROGRAM_NAME)-linux-$(GOARCH) Dockerfile
+	docker build --build-arg BINARY=$(PROGRAM_NAME)-linux-$(GOARCH) --build-arg BASEIMAGE=$(BASEIMAGE) -t $(CONTAINER_NAME) .
 
 curl-container:
 	docker build -f ./examples/example-client/Dockerfile -t quay.io/brancz/krp-curl:v0.0.2 .
@@ -123,8 +122,6 @@ test-local-setup: VERSION_SEMVER = $(shell cat VERSION)
 test-local-setup: clean test-container kind-create-cluster
 test-local: test-local-setup test
 
-test-e2e-local:	test-local-setup test-e2e
-
 kind-delete-cluster:
 	kind delete cluster
 
@@ -146,4 +143,4 @@ $(TOOLING): $(TOOLS_BIN_DIR)
 	@echo Installing tools from scripts/tools.go
 	@cat scripts/tools.go | grep _ | awk -F'"' '{print $$2}' | GOBIN=$(TOOLS_BIN_DIR) xargs -tI % go install -mod=readonly -modfile=scripts/go.mod %
 
-.PHONY: all check-license crossbuild build container push push-% manifest-push curl-container test test-unit test-e2e generate update-go-deps clean kind-delete-cluster kind-create-cluster
+.PHONY: all check-license crossbuild build container push push-% manifest-push test-container curl-container test test-unit test-e2e generate update-go-deps clean kind-delete-cluster kind-create-cluster
