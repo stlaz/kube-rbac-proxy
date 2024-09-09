@@ -17,7 +17,7 @@ package rewrite_test
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/brancz/kube-rbac-proxy/pkg/authorization/rewrite"
@@ -129,7 +129,7 @@ func TestRewritingAuthorizer(t *testing.T) {
 				reason := "some error"
 
 				// shouldn't happen, but just in case
-				return authorizer.DecisionAllow, reason, fmt.Errorf("%s", reason)
+				return authorizer.DecisionAllow, reason, errors.New(reason)
 			}),
 			attrGen:  simpleAttributesGenerator,
 			expected: authorizer.DecisionDeny,
