@@ -36,7 +36,6 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	serverconfig "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	k8sapiflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/logs"
@@ -62,11 +61,6 @@ func NewKubeRBACProxyCommand() *cobra.Command {
 that can perform RBAC authorization against the Kubernetes API using SubjectAccessReview.`,
 
 		SilenceUsage: true,
-		PersistentPreRunE: func(*cobra.Command, []string) error {
-			klog.SetLogFilter(&SanitizingFilter{})
-			rest.SetDefaultWarningHandler(rest.NoWarnings{})
-			return nil
-		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
 
