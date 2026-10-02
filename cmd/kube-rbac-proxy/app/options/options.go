@@ -137,9 +137,6 @@ func (o *ProxyRunOptions) Flags() k8sapiflag.NamedFlagSets {
 	flagset.Uint32Var(&o.HTTP2MaxConcurrentStreams, "http2-max-concurrent-streams", 100, "The maximum number of concurrent streams per HTTP/2 connection.")
 	flagset.Uint32Var(&o.HTTP2MaxSize, "http2-max-size", 256*1024, "The maximum number of bytes that the server will accept for frame size and buffer per stream in a HTTP/2 request.")
 
-	// disabled flags
-	o.addDisabledFlags(flagset)
-
 	return namedFlagSets
 }
 
@@ -195,11 +192,6 @@ For more information, please go to https://github.com/brancz/kube-rbac-proxy/iss
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to verify ignored path: %s", pathIgnored))
 		}
-	}
-
-	// Removed upstream flags shouldn't be use
-	if err := o.validateDisabledFlags(); err != nil {
-		errs = append(errs, err)
 	}
 
 	return utilerrors.NewAggregate(errs)
