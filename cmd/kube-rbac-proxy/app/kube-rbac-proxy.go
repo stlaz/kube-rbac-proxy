@@ -18,7 +18,6 @@ package app
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -30,7 +29,6 @@ import (
 
 	"github.com/oklog/run"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/http2"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -189,15 +187,14 @@ func Run(opts *completedProxyRunOptions) error {
 	proxy := httputil.NewSingleHostReverseProxy(cfg.KubeRBACProxyInfo.UpstreamURL)
 	proxy.Transport = cfg.KubeRBACProxyInfo.UpstreamTransport
 	if cfg.KubeRBACProxyInfo.UpstreamForceH2C {
-		proxy.Transport = &http2.Transport{
-			AllowHTTP: true,
-			DialTLSContext: func(ctx context.Context, netw, addr string, _ *tls.Config) (net.Conn, error) {
-				dialer := &net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}
-				return dialer.DialContext(ctx, netw, addr)
-			},
+		var protocols http.Protocols
+		protocols.SetUnencryptedHTTP2(true)
+		proxy.Transport = &http.Transport{
+			Protocols: &protocols,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
 		}
 	}
 
