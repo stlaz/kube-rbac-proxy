@@ -372,12 +372,12 @@ func TestSetupAuthorizer_IgnorePathsWithResourceAttributes(t *testing.T) {
 	errPath := defaultKubeRBACProxyInfo()
 	errPath.IgnorePaths = []string{"/foo/*/metrics"}
 	errPath.AllowPaths = nil
-	errPath.Authorization.RewriteAttributesConfig.Rewrites = &rewrite.SubjectAccessReviewRewrites{
+	errPath.Authorization.Rewrites = &rewrite.SubjectAccessReviewRewrites{
 		ByHTTPHeader: &rewrite.HTTPHeaderRewriteConfig{
 			Name: "x-namespace",
 		},
 	}
-	errPath.Authorization.RewriteAttributesConfig.ResourceAttributes.Namespace = "{{ .Value }}"
+	errPath.Authorization.ResourceAttributes.Namespace = "{{ .Value }}"
 	errPath.Authorization.Static[0].ResourceRequest = false
 
 	for _, tt := range []struct {
