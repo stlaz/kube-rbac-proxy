@@ -61,6 +61,10 @@ func NewKubeRBACProxyCommand() *cobra.Command {
 that can perform RBAC authorization against the Kubernetes API using SubjectAccessReview.`,
 
 		SilenceUsage: true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			klog.SetLogFilter(&SanitizingFilter{})
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
 
