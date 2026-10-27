@@ -615,16 +615,8 @@ func TestSetupAuthorizer_NonResourceAttributesGenerator(t *testing.T) {
 	}
 }
 
-type mockAuthorizer func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error)
-
-var _ authorizer.Authorizer = newMockDelegatedAuthorizer()
-
-func (m mockAuthorizer) Authorize(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
-	return m(ctx, a)
-}
-
-func newMockDelegatedAuthorizer() mockAuthorizer {
-	return mockAuthorizer(
+func newMockDelegatedAuthorizer() authorizer.Authorizer {
+	return authorizer.AuthorizerFunc(
 		func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
 			if a.GetUser().GetName() == "system:serviceaccount:default:client-with-rbac" {
 				return authorizer.DecisionAllow, "delegated allow", nil
